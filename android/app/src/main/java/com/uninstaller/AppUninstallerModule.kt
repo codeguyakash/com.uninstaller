@@ -1,0 +1,113 @@
+package com.uninstaller
+
+import android.app.Activity
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.graphics.drawable.BitmapDrawable
+import android.graphics.Bitmap
+import com.facebook.react.bridge.*
+import java.io.ByteArrayOutputStream
+import android.util.Base64
+
+class AppUninstallerModule(private val reactContext: ReactApplicationContext) :
+    ReactContextBaseJavaModule(reactContext) {
+
+    override fun getName(): String {
+        return "AppUninstaller"
+    }
+
+    @ReactMethod
+    fun getInstalledAppsOld(promise: Promise) {
+        try {
+            val pm: PackageManager = reactContext.packageManager
+            val packages = pm.getInstalledApplications(PackageManager.GET_META_DATA)
+
+            val appList = WritableNativeArray()
+            for (app in packages) {
+                val map = WritableNativeMap()
+                map.putString("packageName", app.packageName)
+                map.putString("appName", pm.getApplicationLabel(app).toString())
+                map.putString("versionName", pm.getPackageInfo(app.packageName, 0).versionName)
+                appList.pushMap(map)
+            }
+            promise.resolve(appList)
+        } catch (e: Exception) {
+            promise.reject("ERROR", e.message)
+        }
+    }
+    @ReactMethod
+    fun getInstalledApps(promise: Promise) {
+        try {
+            val pm: PackageManager = reactContext.packageManager
+            val packages = pm.getInstalledApplications(PackageManager.GET_META_DATA)
+
+            val appList = WritableNativeArray()
+
+            for (app in packages) {
+                val map = WritableNativeMap()
+                map.putString("packageName", app.packageName)
+                map.putString("appName", pm.getApplicationLabel(app).toString())
+                map.putString("versionName", pm.getPackageInfo(app.packageName, 0).versionName)
+
+                // Get icon as Base64
+                val drawable = pm.getApplicationIcon(app.packageName)
+                val bitmap = when (drawable) {
+                    is BitmapDrawable -> drawable.bitmap
+                    is android.graphics.drawable.AdaptiveIconDrawable -> {
+                        val bitmap = Bitmap.createBitmap(
+                            drawable.intrinsicWidth,
+                            drawable.intrinsicHeight,
+                            Bitmap.Config.ARGB_8888
+                        )
+                        val canvas = android.graphics.Canvas(bitmap)
+                        drawable.setBounds(0, 0, canvas.width, canvas.height)
+                        drawable.draw(canvas)
+                        bitmap
+                    }
+                    else -> {
+                        // Fallback for other drawable types
+                        val bitmap = Bitmap.createBitmap(
+                            drawable.intrinsicWidth,
+                            drawable.intrinsicHeight,
+                            Bitmap.Config.ARGB_8888
+                        )
+                        val canvas = android.graphics.Canvas(bitmap)
+                        drawable.setBounds(0, 0, canvas.width, canvas.height)
+                        drawable.draw(canvas)
+                        bitmap
+                    }
+                }
+                val outputStream = ByteArrayOutputStream()
+                bitmap.compress(Bitmap.CompressFormat.PNG, 100, outputStream)
+                val iconBase64 = Base64.encodeToString(outputStream.toByteArray(), Base64.DEFAULT)
+                map.putString("icon", "data:image/png;base64,$iconBase64")
+
+                appList.pushMap(map)
+            }
+
+            promise.resolve(appList)
+        } catch (e: Exception) {
+            promise.reject("ERROR", e.message)
+        }
+    }
+
+   @ReactMethod
+    fun uninstallApp(packageName: String, promise: Promise) {
+        try {
+            val currentActivity: Activity? = currentActivity
+            val intent = Intent(Intent.ACTION_DELETE)
+            intent.data = Uri.parse("package:$packageName")
+
+            if (currentActivity != null) {
+                currentActivity.startActivity(intent)
+            } else {
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                reactContext.startActivity(intent)
+            }
+            promise.resolve(true)
+        } catch (e: Exception) {
+            promise.reject("ERROR", e.message)
+        }
+}
+}
