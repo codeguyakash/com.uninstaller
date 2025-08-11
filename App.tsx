@@ -7,6 +7,7 @@ import {
   Button,
   Alert,
   Image,
+  useColorScheme,
 } from 'react-native';
 import { NativeModules } from 'react-native';
 const { AppUninstaller } = NativeModules;
@@ -19,6 +20,9 @@ interface AppInfo {
 
 function App() {
   const [apps, setApps] = useState<AppInfo[]>([]);
+
+  const scheme = useColorScheme();
+  console.log(scheme, 'Scheme');
 
   const fetchApps = async () => {
     try {
@@ -63,8 +67,17 @@ function App() {
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.heading}>Installed Apps: ({apps.length})</Text>
+    <View
+      style={[
+        styles.container,
+        { backgroundColor: scheme === 'dark' ? '#000' : '#fff' },
+      ]}
+    >
+      <Text
+        style={[styles.heading, { color: scheme === 'dark' ? '#fff' : '#000' }]}
+      >
+        Installed Apps: ({apps.length})
+      </Text>
       <FlatList
         data={apps}
         keyExtractor={item => item?.packageName}
@@ -72,8 +85,22 @@ function App() {
           <View style={styles.appItem}>
             <Image source={{ uri: item?.icon }} style={styles.icon} />
             <View style={{ flex: 1 }}>
-              <Text style={styles.appName}>{item?.appName}</Text>
-              <Text style={styles.packageName}>{item?.packageName}</Text>
+              <Text
+                style={[
+                  styles.appName,
+                  { color: scheme === 'dark' ? '#fff' : '#000' },
+                ]}
+              >
+                {item?.appName}
+              </Text>
+              <Text
+                style={[
+                  styles.packageName,
+                  { color: scheme === 'dark' ? '#aaa' : '#666' },
+                ]}
+              >
+                {item?.packageName}
+              </Text>
             </View>
             <Button
               title="Uninstall"
@@ -91,7 +118,6 @@ function App() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
     paddingTop: 50,
     paddingHorizontal: 16,
   },
@@ -114,7 +140,6 @@ const styles = StyleSheet.create({
   },
   packageName: {
     fontSize: 12,
-    color: '#666',
   },
   icon: {
     width: 40,

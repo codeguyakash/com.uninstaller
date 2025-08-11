@@ -10,6 +10,11 @@ import com.facebook.react.bridge.*
 import java.io.ByteArrayOutputStream
 import android.util.Base64
 
+
+import android.app.admin.DevicePolicyManager
+import android.content.ComponentName
+import android.content.Context
+
 class AppUninstallerModule(private val reactContext: ReactApplicationContext) :
     ReactContextBaseJavaModule(reactContext) {
 
@@ -109,5 +114,22 @@ class AppUninstallerModule(private val reactContext: ReactApplicationContext) :
         } catch (e: Exception) {
             promise.reject("ERROR", e.message)
         }
-}
+    }
+    @ReactMethod
+    fun deactivateDeviceAdmin(promise: Promise) {
+        try {
+            val context = reactApplicationContext
+            val dpm = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+            val componentName = ComponentName(context, MyDeviceAdminReceiver::class.java)
+
+            if (dpm.isAdminActive(componentName)) {
+                dpm.removeActiveAdmin(componentName)
+                promise.resolve(true)
+            } else {
+                promise.resolve(false)
+            }
+        } catch (e: Exception) {
+            promise.reject("DEVICE_ADMIN_ERROR", e)
+        }
+    }
 }
