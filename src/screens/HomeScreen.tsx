@@ -30,17 +30,7 @@ function HomeScreen() {
   const scheme = useColorScheme();
 
   useEffect(() => {
-    (async () => {
-      try {
-        let packageList = await AppUninstaller.getInstalledApps();
-        packageList = packageList.filter(
-          (app: any) => app.icon && app.packageName !== 'com.uninstaller',
-        );
-        setAllApps(packageList);
-      } catch (error) {
-        console.error('Error fetching apps:', error);
-      }
-    })();
+    getAllApps();
   }, []);
 
   useEffect(() => {
@@ -56,6 +46,18 @@ function HomeScreen() {
       return name.includes(q) || pkg.includes(q);
     });
   }, [allApps, q]);
+
+  const getAllApps = async () => {
+    try {
+      let packageList = await AppUninstaller.getInstalledApps();
+      packageList = packageList.filter(
+        (app: any) => app.icon && app.packageName !== 'com.uninstaller',
+      );
+      setAllApps(packageList);
+    } catch (error) {
+      console.error('Error fetching apps:', error);
+    }
+  };
 
   const handleUninstall = (packageName: string) => {
     Alert.alert(
