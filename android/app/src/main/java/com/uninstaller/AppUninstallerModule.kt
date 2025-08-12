@@ -115,6 +115,68 @@ class AppUninstallerModule(private val reactContext: ReactApplicationContext) :
             promise.reject("ERROR", e.message)
         }
     }
+
+    @ReactMethod
+    fun shareApp(packageName: String, promise: Promise) {
+        try {
+            val pm = reactContext.packageManager
+            val appInfo = pm.getApplicationInfo(packageName, 0)
+            val srcApk = java.io.File(appInfo.sourceDir)
+
+            // Copy to app cache so it’s under a configured FileProvider root
+            val cacheDir = java.io.File(reactContext.cacheDir, "shared_apks")
+            if (!cacheDir.exists()) cacheDir.mkdirs()
+
+            val dstApk = java.io.File(cacheDir, "${appInfo.packageName}.apk")
+
+            // Efficient copy (API 26+). For older, use streams.
+            java.nio.file.Files.copy(
+                srcApk.toPath(),
+                dstApk.toPath(),
+                java.nio.file.StandardCopyOption.REPLACE_EXISTING
+            )
+
+            val apkUri = androidx.core.content.FileProvider.getUriForFile(
+                reactContext,
+                reactContext.packageName + ".provider",
+                dstApk
+            )
+
+            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                type = "application/vnd.android.package-archive"
+                putExtra(Intent.EXTRA_STREAM, apkUri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                // Optional: help some receivers honor the grant correctly
+                clipData = android.content.ClipData.newRawUri("APK", apkUri)
+            }
+
+            // Grant read to all potential receivers in chooser (belt-and-suspenders)
+            val resInfoList = reactContext.packageManager.queryIntentActivities(shareIntent, 0)
+            for (resInfo in resInfoList) {
+                val packageNameGrant = resInfo.activityInfo.packageName
+                reactContext.grantUriPermission(
+                    packageNameGrant,
+                    apkUri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            }
+
+            val chooser = Intent.createChooser(shareIntent, "Share App")
+            val activity = currentActivity
+            if (activity != null) {
+                activity.startActivity(chooser)
+            } else {
+                chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                reactContext.startActivity(chooser)
+            }
+
+            promise.resolve(true)
+        } catch (e: Exception) {
+            promise.reject("SHARE_ERROR", e)
+        }
+    }
+
+
     @ReactMethod
     fun deactivateDeviceAdmin(promise: Promise) {
         try {
