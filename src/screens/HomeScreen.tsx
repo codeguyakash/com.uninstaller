@@ -28,6 +28,7 @@ function HomeScreen() {
   const [q, setQ] = useState('');
 
   const scheme = useColorScheme();
+  const isDarkMode = scheme === 'dark';
 
   useEffect(() => {
     getAllApps();
@@ -89,16 +90,11 @@ function HomeScreen() {
     <View
       style={[
         styles.container,
-        { backgroundColor: scheme === 'dark' ? '#000' : '#fff' },
+        { backgroundColor: isDarkMode ? '#000' : '#fff' },
       ]}
     >
       <View>
-        <Text
-          style={[
-            styles.heading,
-            { color: scheme === 'dark' ? '#fff' : '#000' },
-          ]}
-        >
+        <Text style={[styles.heading, { color: isDarkMode ? '#fff' : '#000' }]}>
           Installed Apps: ({filteredApps.length})
         </Text>
       </View>
@@ -112,9 +108,9 @@ function HomeScreen() {
         style={[
           styles.input,
           {
-            color: scheme === 'dark' ? '#fff' : '#000',
-            backgroundColor: scheme === 'dark' ? '#111' : '#fafafa',
-            borderColor: scheme === 'dark' ? '#333' : '#ddd',
+            color: isDarkMode ? '#fff' : '#000',
+            backgroundColor: isDarkMode ? '#111' : '#fafafa',
+            borderColor: isDarkMode ? '#333' : '#ddd',
           },
         ]}
       />
@@ -128,11 +124,11 @@ function HomeScreen() {
           <View style={{ alignItems: 'center', paddingTop: 300 }}>
             <ActivityIndicator
               size="large"
-              color={scheme === 'dark' ? '#fff' : '#000'}
+              color={isDarkMode ? '#fff' : '#000'}
             />
             <Text
               style={{
-                color: scheme === 'dark' ? '#fff' : '#000',
+                color: isDarkMode ? '#fff' : '#000',
                 textAlign: 'center',
                 fontSize: 16,
                 fontWeight: '500',
@@ -161,7 +157,7 @@ function HomeScreen() {
             style={({ pressed }) => [
               styles.appItem,
               pressed && {
-                backgroundColor: scheme === 'dark' ? '#5f5f5f66' : '#e6e6e6',
+                backgroundColor: isDarkMode ? '#5f5f5f66' : '#e6e6e6',
               },
             ]}
           >
@@ -170,7 +166,7 @@ function HomeScreen() {
               <Text
                 style={[
                   styles.appName,
-                  { color: scheme === 'dark' ? '#fff' : '#000' },
+                  { color: isDarkMode ? '#fff' : '#000' },
                 ]}
               >
                 {item.appName}
@@ -178,7 +174,7 @@ function HomeScreen() {
               <Text
                 style={[
                   styles.packageName,
-                  { color: scheme === 'dark' ? '#aaa' : '#666' },
+                  { color: isDarkMode ? '#aaa' : '#666' },
                 ]}
               >
                 {item.packageName}
