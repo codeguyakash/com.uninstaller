@@ -1,0 +1,64 @@
+name: Android Release with APK Upload
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, 'PROD BUILD')
+    name: Build and Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+
+      - name: ⚙️ Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+          cache: gradle
+
+      - name: 🛠️ Install Android SDK + build-tools
+        uses: android-actions/setup-android@v3
+
+      - name: 📦 Install platform & build-tools
+        run: |
+          sdkmanager --install "platforms;android-34" "build-tools;34.0.0" "platform-tools"
+          yes | sdkmanager --licenses
+
+      - name: 🧰 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: 'npm'
+
+      - name: 📦 Install dependencies
+        run: npm ci
+
+      - name: 🚀 Build release APK(s)
+        working-directory: android
+        run: |
+          ./gradlew clean
+          ./gradlew assembleRelease
+
+      - name: 📦 Collect APK artifacts
+        run: |
+          mkdir -p dist
+          # Single/universal release (unsigned if you didn't configure signing)
+          cp -v android/app/build/outputs/apk/release/*.apk dist/ || true
+          # ABI split outputs (if enabled)
+          cp -v android/app/build/outputs/apk/*/release/*.apk dist/ || true
+          ls -al dist
+
+      - name: 🏷️ Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ github.run_number }}
+          name: Release ${{ github.run_number }}
+          files: dist/*.apk
