@@ -14,6 +14,7 @@ import {
   ActivityIndicator,
   Dimensions,
   StatusBar,
+  ToastAndroid,
 } from 'react-native';
 import { NativeModules } from 'react-native';
 const { AppUninstaller } = NativeModules;
@@ -36,10 +37,11 @@ function HomeScreen() {
 
   const scheme = useColorScheme();
   const isDarkMode = scheme === 'dark';
+  const textColor = isDarkMode ? '#fff' : '#000';
 
   useEffect(() => {
     getAllApps();
-    console.log(height - 300);
+    console.log(ToastAndroid);
   }, []);
 
   useEffect(() => {
@@ -92,51 +94,23 @@ function HomeScreen() {
     );
   };
 
-  const handleShareApp = (packageName: string) => {
-    AppUninstaller.shareApp(packageName)
-      .then(() => console.log('App shared successfully'))
-      .catch((err: any) => console.error(err));
+  const handleShareApp = async (packageName: string) => {
+    try {
+      let response = await AppUninstaller.shareApp(packageName);
+      console.log('Share Response', response);
+      if (response) {
+        ToastAndroid.showWithGravity(
+          `${packageName} Share Successfully`,
+          20,
+          1
+        );
+      }
+    } catch (error) {
+      console.log('Error', error);
+    }
   };
-
-  let textColor = isDarkMode ? '#fff' : '#000';
 
   // ===================================== List Components Here =====================================
-  const listHeader = () => {
-    return (
-      <View>
-        <Text style={[styles.heading, { color: textColor }]}>
-          Installed Apps: ({filteredApps.length})
-        </Text>
-        <View>
-          <TextInput
-            placeholder="Search by package or name"
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            autoCorrect={false}
-            autoCapitalize="none"
-            style={[
-              styles.input,
-              {
-                color: textColor,
-                backgroundColor: isDarkMode ? '#000' : '#fff',
-                borderColor: isDarkMode ? '#333' : '#ddd',
-              },
-            ]}
-          />
-          <Text
-            onPress={() => setSearchQuery('')}
-            style={{
-              color: textColor,
-              position: 'absolute',
-              top: 8,
-              right: 10,
-            }}>
-            Clear
-          </Text>
-        </View>
-      </View>
-    );
-  };
   const listItems = (item: any) => {
     return (
       <Pressable
@@ -181,8 +155,12 @@ function HomeScreen() {
   };
   const listFooter = () => {
     return (
-      <Text style={[styles.heading, { color: textColor, textAlign: 'center' }]}>
-        All Apps End Here
+      <Text
+        style={[
+          styles.heading,
+          { color: textColor, textAlign: 'center', fontSize: 14 },
+        ]}>
+        @codeguyakash
       </Text>
     );
   };
@@ -208,12 +186,44 @@ function HomeScreen() {
           backgroundColor: isDarkMode ? '#000' : '#fff',
         },
       ]}>
+      <View>
+        <Text style={[styles.heading, { color: textColor }]}>
+          Installed Apps : ({filteredApps.length})
+        </Text>
+        <View>
+          <TextInput
+            placeholder="Search by package or name"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            autoCorrect={false}
+            autoCapitalize="none"
+            style={[
+              styles.input,
+              {
+                color: textColor,
+                backgroundColor: isDarkMode ? '#000' : '#fff',
+                borderColor: isDarkMode ? '#333' : '#ddd',
+              },
+            ]}
+          />
+          <Text
+            onPress={() => setSearchQuery('')}
+            style={{
+              color: textColor,
+              position: 'absolute',
+              top: 8,
+              right: 10,
+            }}>
+            Clear
+          </Text>
+        </View>
+      </View>
       <FlatList
         data={filteredApps}
         keyExtractor={(item) => item.packageName}
         initialNumToRender={20}
         windowSize={8}
-        ListHeaderComponent={listHeader}
+        ListHeaderComponent={null}
         renderItem={({ item }) => listItems(item)}
         ListFooterComponent={listFooter}
         ListEmptyComponent={listEmpty}
