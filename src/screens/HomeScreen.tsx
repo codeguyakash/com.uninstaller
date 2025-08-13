@@ -41,7 +41,6 @@ function HomeScreen() {
 
   useEffect(() => {
     getAllApps();
-    console.log(ToastAndroid);
   }, []);
 
   useEffect(() => {
@@ -94,16 +93,26 @@ function HomeScreen() {
     );
   };
 
-  const handleShareApp = async (packageName: string) => {
+  const showToast = (massage: string) => {
+    return ToastAndroid.showWithGravity(
+      `${massage}`,
+      ToastAndroid.LONG,
+      ToastAndroid.CENTER
+    );
+  };
+
+  const handleShareApp = async ({
+    appName,
+    packageName,
+  }: {
+    appName: string;
+    packageName: string;
+  }) => {
     try {
       let response = await AppUninstaller.shareApp(packageName);
       console.log('Share Response', response);
       if (response) {
-        ToastAndroid.showWithGravity(
-          `${packageName} Share Successfully`,
-          20,
-          1
-        );
+        showToast(`${appName} Share Success!`);
       }
     } catch (error) {
       console.log('Error', error);
@@ -120,7 +129,7 @@ function HomeScreen() {
           Alert.alert('Share App', `Do you want to share ${item.appName}?`, [
             {
               text: 'Share',
-              onPress: () => handleShareApp(item.packageName),
+              onPress: () => handleShareApp(item),
             },
             { text: 'Cancel', style: 'cancel' },
           ]);
