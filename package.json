@@ -3,7 +3,7 @@
   "version": "0.0.1",
   "private": true,
   "scripts": {
-    "and": "react-native run-android",
+    "a": "react-native run-android",
     "lint": "eslint .",
     "start": "react-native start",
     "test": "jest"

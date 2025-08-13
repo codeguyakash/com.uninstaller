@@ -12,6 +12,8 @@ import {
   Pressable,
   Vibration,
   ActivityIndicator,
+  Dimensions,
+  StatusBar,
 } from 'react-native';
 import { NativeModules } from 'react-native';
 const { AppUninstaller } = NativeModules;
@@ -22,16 +24,22 @@ interface AppInfo {
   icon: string;
 }
 
+const { height, width } = Dimensions.get('window');
 function HomeScreen() {
   const [allApps, setAllApps] = useState<AppInfo[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [q, setQ] = useState('');
+
+  const ONE_SECOND_IN_MS = 1000;
+  const PATTERN: number[] = [1 * ONE_SECOND_IN_MS];
+  const HEADER_HIGHT = 200;
 
   const scheme = useColorScheme();
   const isDarkMode = scheme === 'dark';
 
   useEffect(() => {
     getAllApps();
+    console.log(height - 300);
   }, []);
 
   useEffect(() => {
@@ -41,7 +49,7 @@ function HomeScreen() {
 
   const filteredApps = useMemo(() => {
     if (!q) return allApps;
-    return allApps.filter(app => {
+    return allApps.filter((app) => {
       const name = app.appName?.toLowerCase() ?? '';
       const pkg = app.packageName?.toLowerCase() ?? '';
       return name.includes(q) || pkg.includes(q);
@@ -51,9 +59,6 @@ function HomeScreen() {
   const getAllApps = async () => {
     try {
       let packageList = await AppUninstaller.getInstalledApps();
-      packageList = packageList.filter(
-        (app: any) => app.icon && app.packageName !== 'com.uninstaller',
-      );
       setAllApps(packageList);
     } catch (error) {
       console.error('Error fetching apps:', error);
@@ -61,6 +66,13 @@ function HomeScreen() {
   };
 
   const handleUninstall = (packageName: string) => {
+    if (packageName === 'com.uninstaller') {
+      Alert.alert(
+        "Can't Uninstall",
+        'this is main app which list all installed apps'
+      );
+      return;
+    }
     Alert.alert(
       'Confirm Uninstall',
       `Are you sure you want to uninstall ${packageName}?`,
@@ -76,7 +88,7 @@ function HomeScreen() {
           },
         },
         { text: 'Cancel', style: 'cancel' },
-      ],
+      ]
     );
   };
 
@@ -86,115 +98,136 @@ function HomeScreen() {
       .catch((err: any) => console.error(err));
   };
 
+  let textColor = isDarkMode ? '#fff' : '#000';
+
+  // ===================================== List Components Here =====================================
+  const listHeader = () => {
+    return (
+      <View>
+        <Text style={[styles.heading, { color: textColor }]}>
+          Installed Apps: ({filteredApps.length})
+        </Text>
+        <View>
+          <TextInput
+            placeholder="Search by package or name"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            autoCorrect={false}
+            autoCapitalize="none"
+            style={[
+              styles.input,
+              {
+                color: textColor,
+                backgroundColor: isDarkMode ? '#000' : '#fff',
+                borderColor: isDarkMode ? '#333' : '#ddd',
+              },
+            ]}
+          />
+          <Text
+            onPress={() => setSearchQuery('')}
+            style={{
+              color: textColor,
+              position: 'absolute',
+              top: 8,
+              right: 10,
+            }}>
+            Clear
+          </Text>
+        </View>
+      </View>
+    );
+  };
+  const listItems = (item: any) => {
+    return (
+      <Pressable
+        onLongPress={() => {
+          Vibration.vibrate(PATTERN);
+          console.log('Long Pressed');
+          Alert.alert('Share App', `Do you want to share ${item.appName}?`, [
+            {
+              text: 'Share',
+              onPress: () => handleShareApp(item.packageName),
+            },
+            { text: 'Cancel', style: 'cancel' },
+          ]);
+        }}
+        style={({ pressed }) => [
+          styles.appItem,
+          pressed && {
+            backgroundColor: isDarkMode ? '#30303081' : '#bfbfbf81',
+          },
+        ]}>
+        <Image source={{ uri: item.icon }} style={styles.icon} />
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.appName, { color: textColor }]}>
+            {item.appName}
+          </Text>
+          <Text
+            style={[
+              styles.packageName,
+              { color: isDarkMode ? '#aaa' : '#666' },
+            ]}>
+            {item.packageName}
+          </Text>
+        </View>
+        <Button
+          title="Uninstall"
+          onPress={() => handleUninstall(item.packageName)}
+          color="red"
+          accessibilityLabel={`Uninstall ${item.appName}`}
+        />
+      </Pressable>
+    );
+  };
+  const listFooter = () => {
+    return (
+      <Text style={[styles.heading, { color: textColor, textAlign: 'center' }]}>
+        All Apps End Here
+      </Text>
+    );
+  };
+  const listEmpty = () => {
+    return (
+      <View
+        style={{
+          alignItems: 'center',
+          justifyContent: 'center',
+          height: height - HEADER_HIGHT,
+        }}>
+        <ActivityIndicator size="large" color="red" />
+      </View>
+    );
+  };
+  // ===================================== List Components Here =====================================
+
   return (
     <View
       style={[
         styles.container,
-        { backgroundColor: isDarkMode ? '#000' : '#fff' },
-      ]}
-    >
-      <View>
-        <Text style={[styles.heading, { color: isDarkMode ? '#fff' : '#000' }]}>
-          Installed Apps: ({filteredApps.length})
-        </Text>
-      </View>
-
-      <TextInput
-        placeholder="Search by package or name"
-        value={searchQuery}
-        onChangeText={setSearchQuery}
-        autoCorrect={false}
-        autoCapitalize="none"
-        style={[
-          styles.input,
-          {
-            color: isDarkMode ? '#fff' : '#000',
-            backgroundColor: isDarkMode ? '#111' : '#fafafa',
-            borderColor: isDarkMode ? '#333' : '#ddd',
-          },
-        ]}
-      />
-
+        {
+          backgroundColor: isDarkMode ? '#000' : '#fff',
+        },
+      ]}>
       <FlatList
         data={filteredApps}
-        keyExtractor={item => item.packageName}
+        keyExtractor={(item) => item.packageName}
         initialNumToRender={20}
         windowSize={8}
-        ListEmptyComponent={
-          <View style={{ alignItems: 'center', paddingTop: 300 }}>
-            <ActivityIndicator
-              size="large"
-              color={isDarkMode ? '#fff' : '#000'}
-            />
-            <Text
-              style={{
-                color: isDarkMode ? '#fff' : '#000',
-                textAlign: 'center',
-                fontSize: 16,
-                fontWeight: '500',
-              }}
-            >
-              Loading...
-            </Text>
-          </View>
-        }
-        renderItem={({ item }) => (
-          <Pressable
-            onLongPress={() => {
-              Vibration.vibrate(50);
-              Alert.alert(
-                'Share App',
-                `Do you want to share ${item.appName}?`,
-                [
-                  {
-                    text: 'Share',
-                    onPress: () => handleShareApp(item.packageName),
-                  },
-                  { text: 'Cancel', style: 'cancel' },
-                ],
-              );
-            }}
-            style={({ pressed }) => [
-              styles.appItem,
-              pressed && {
-                backgroundColor: isDarkMode ? '#5f5f5f66' : '#e6e6e6',
-              },
-            ]}
-          >
-            <Image source={{ uri: item.icon }} style={styles.icon} />
-            <View style={{ flex: 1 }}>
-              <Text
-                style={[
-                  styles.appName,
-                  { color: isDarkMode ? '#fff' : '#000' },
-                ]}
-              >
-                {item.appName}
-              </Text>
-              <Text
-                style={[
-                  styles.packageName,
-                  { color: isDarkMode ? '#aaa' : '#666' },
-                ]}
-              >
-                {item.packageName}
-              </Text>
-            </View>
-            <Button
-              title="Uninstall"
-              onPress={() => handleUninstall(item.packageName)}
-              color="red"
-              accessibilityLabel={`Uninstall ${item.appName}`}
-            />
-          </Pressable>
-        )}
+        ListHeaderComponent={listHeader}
+        renderItem={({ item }) => listItems(item)}
+        ListFooterComponent={listFooter}
+        ListEmptyComponent={listEmpty}
       />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, paddingTop: 50, paddingHorizontal: 16 },
+  container: {
+    flex: 1,
+    paddingTop: StatusBar.currentHeight,
+    paddingHorizontal: 16,
+  },
   heading: { fontSize: 20, fontWeight: 'bold', marginBottom: 12 },
   appItem: {
     flexDirection: 'row',
@@ -202,8 +235,8 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     paddingVertical: 8,
     paddingHorizontal: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#ddd',
+    borderBottomWidth: 0.2,
+    borderBottomColor: '#888888ff',
   },
   appName: { fontSize: 16, fontWeight: '500' },
   packageName: { fontSize: 12 },
