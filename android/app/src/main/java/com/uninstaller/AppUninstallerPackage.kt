@@ -7,7 +7,10 @@ import com.facebook.react.uimanager.ViewManager
 
 class AppUninstallerPackage : ReactPackage {
     override fun createNativeModules(reactContext: ReactApplicationContext): List<NativeModule> {
-        return listOf(AppUninstallerModule(reactContext))
+        return listOf(
+            AppUninstallerModule(reactContext),
+            AppControlModule(reactContext)
+        )
     }
 
     override fun createViewManagers(reactContext: ReactApplicationContext): List<ViewManager<*, *>> {

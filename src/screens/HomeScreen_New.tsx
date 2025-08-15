@@ -17,7 +17,7 @@ import {
   ToastAndroid,
 } from 'react-native';
 import { NativeModules } from 'react-native';
-const { AppUninstaller } = NativeModules;
+const { AppUninstaller, AppControl } = NativeModules;
 
 interface AppInfo {
   appName: string;
@@ -26,18 +26,43 @@ interface AppInfo {
 }
 
 const { height, width } = Dimensions.get('window');
-function HomeScreen() {
+function HomeScreenNew() {
   const [allApps, setAllApps] = useState<AppInfo[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [isDisableApp, setIsDisable] = useState(false);
   const [q, setQ] = useState('');
 
-  const ONE_SECOND_IN_MS = 1000;
-  const PATTERN: number[] = [1 * ONE_SECOND_IN_MS];
-  const HEADER_HIGHT = 200;
+  const PATTERN = [0, 30, 40, 30];
+  const HEADER_HEIGHT = 200;
 
   const scheme = useColorScheme();
   const isDarkMode = scheme === 'dark';
   const textColor = isDarkMode ? '#fff' : '#000';
+
+  const [adminPkgs, setAdminPkgs] = useState<Record<string, boolean>>({});
+  const [enabledMap, setEnabledMap] = useState<Record<string, boolean>>({});
+
+  const markEnabled = (pkg: string, enable: boolean) =>
+    setEnabledMap((m) => ({ ...m, [pkg]: enable }));
+
+  const loadAdminFlags = async (apps: AppInfo[]) => {
+    const updates: Record<string, boolean> = {};
+    await Promise.all(
+      apps.map(async (a) => {
+        try {
+          const admins = await AppControl.listActiveAdmins(a.packageName);
+          updates[a.packageName] = Array.isArray(admins) && admins.length > 0;
+        } catch {
+          updates[a.packageName] = false;
+        }
+      })
+    );
+    setAdminPkgs((prev) => ({ ...prev, ...updates }));
+  };
+
+  useEffect(() => {
+    if (allApps.length) loadAdminFlags(allApps);
+  }, [allApps]);
 
   useEffect(() => {
     getAllApps();
@@ -101,6 +126,43 @@ function HomeScreen() {
     );
   };
 
+  const handleAppControl = async (packageName: string, enable: boolean) => {
+    try {
+      const res = await AppControl.toggleApp(packageName, enable);
+      console.log('toggleApp', packageName, enable, res);
+
+      markEnabled(packageName, enable);
+
+      if (res?.status === 'ok') {
+        showToast(`App ${enable ? 'enabled' : 'disabled'} request sent`);
+      } else if (res?.status === 'info') {
+        showToast(res?.message || 'Action attempted');
+      } else {
+        showToast(`Result: ${JSON.stringify(res)}`);
+      }
+    } catch (e) {
+      console.error('Error in handleAppControl', e);
+      showToast('Toggle failed');
+    }
+  };
+
+  const handleDeactivateAndUninstall = async (packageName: string) => {
+    try {
+      const res = await AppControl.deactivateAdminsAndUninstall(packageName);
+      console.log('deactivateAdminsAndUninstall', res);
+      showToast(res?.message || 'Opened uninstall UI');
+
+      setTimeout(
+        () =>
+          loadAdminFlags([{ appName: '', packageName, icon: '' } as AppInfo]),
+        1000
+      );
+    } catch (e) {
+      console.error('deactivate+uninstall failed', e);
+      showToast('Deactivate & uninstall failed');
+    }
+  };
+
   const handleShareApp = async ({
     appName,
     packageName,
@@ -120,17 +182,16 @@ function HomeScreen() {
   };
 
   // ===================================== List Components Here =====================================
-  const listItems = (item: any) => {
+  const listItems = (item: AppInfo) => {
+    const isAdmin = !!adminPkgs[item.packageName];
+    const enabled = enabledMap[item.packageName] ?? true; // default assume enabled
+
     return (
       <Pressable
         onLongPress={() => {
-          Vibration.vibrate(PATTERN);
-          console.log('Long Pressed');
+          Vibration.vibrate(50);
           Alert.alert('Share App', `Do you want to share ${item.appName}?`, [
-            {
-              text: 'Share',
-              onPress: () => handleShareApp(item),
-            },
+            { text: 'Share', onPress: () => handleShareApp(item) },
             { text: 'Cancel', style: 'cancel' },
           ]);
         }}
@@ -140,28 +201,76 @@ function HomeScreen() {
             backgroundColor: isDarkMode ? '#30303081' : '#bfbfbf81',
           },
         ]}>
-        <Image source={{ uri: item.icon }} style={styles.icon} />
-        <View style={{ flex: 1 }}>
-          <Text style={[styles.appName, { color: textColor }]}>
-            {item.appName}
-          </Text>
-          <Text
-            style={[
-              styles.packageName,
-              { color: isDarkMode ? '#aaa' : '#666' },
-            ]}>
-            {item.packageName}
-          </Text>
+        <View>
+          <Image source={{ uri: item.icon }} style={styles.icon} />
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.appName, { color: textColor }]}>
+              {item.appName}{' '}
+              {isAdmin && (
+                <Text style={{ color: '#e53935', fontSize: 12 }}>(Admin)</Text>
+              )}
+            </Text>
+            <Text
+              style={[
+                styles.packageName,
+                { color: isDarkMode ? '#aaa' : '#666' },
+              ]}>
+              {item.packageName}
+            </Text>
+          </View>
         </View>
-        <Button
-          title="Uninstall"
-          onPress={() => handleUninstall(item.packageName)}
-          color="red"
-          accessibilityLabel={`Uninstall ${item.appName}`}
-        />
+
+        <View
+          style={{
+            // flexDirection: 'column',
+            // alignItems: 'center',
+            // justifyContent: 'space-between',
+          }}>
+          {/* Toggle Enable/Disable */}
+          {/* Toggle Enable/Disable */}
+          <Pressable
+            onPress={() => handleAppControl(item.packageName, !enabled)}
+            style={({ pressed }) => [
+              styles.button,
+              { backgroundColor: enabled ? '#444' : '#2e7d32' },
+              pressed && { opacity: 0.8 }
+            ]}
+            android_ripple={{ color: '#ffffff33' }}>
+            <Text style={{ color: '#fff' }}>
+              {enabled ? 'Disable' : 'Enable'}
+            </Text>
+          </Pressable>
+
+          {/* Deactivate Admin & Uninstall */}
+          <Pressable
+            onPress={() => handleDeactivateAndUninstall(item.packageName)}
+            style={({ pressed }) => [
+              styles.button,
+              { backgroundColor: '#e65100' },
+              pressed && { opacity: 0.8 }
+            ]}
+            android_ripple={{ color: '#ffffff33' }}>
+            <Text style={{ color: '#fff' }}>Deact+Uninst</Text>
+          </Pressable>
+
+          {/* Plain Uninstall */}
+          <Pressable
+            onPress={() => handleUninstall(item.packageName)}
+            style={({ pressed }) => [
+              styles.button,
+              { backgroundColor: '#e80000ff' },
+              pressed && { backgroundColor: '#ffcccc' }
+            ]}
+            android_ripple={{ color: 'red' }}
+            accessibilityLabel={`Uninstall ${item.appName}`}>
+            <Text style={{ color: '#fff' }}>Uninstall</Text>
+          </Pressable>
+
+        </View>
       </Pressable>
     );
   };
+
   const listFooter = () => {
     return (
       <Text
@@ -179,7 +288,7 @@ function HomeScreen() {
         style={{
           alignItems: 'center',
           justifyContent: 'center',
-          height: height - HEADER_HIGHT,
+          height: height - HEADER_HEIGHT,
         }}>
         <ActivityIndicator size="large" color="red" />
       </View>
@@ -249,8 +358,10 @@ const styles = StyleSheet.create({
   },
   heading: { fontSize: 20, fontWeight: 'bold', marginBottom: 12 },
   appItem: {
+    width: width - 50,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: 10,
     paddingVertical: 8,
     paddingHorizontal: 10,
@@ -261,6 +372,14 @@ const styles = StyleSheet.create({
   packageName: { fontSize: 12 },
   icon: { width: 40, height: 40, borderRadius: 8, marginRight: 10 },
   input: { borderWidth: 1, borderRadius: 4, padding: 8, marginBottom: 12 },
+  button: {
+    borderRadius: 4,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 6
+  }
 });
 
-export default HomeScreen;
+export default HomeScreenNew;

@@ -6,7 +6,8 @@
     "a": "react-native run-android",
     "lint": "eslint .",
     "start": "react-native start",
-    "test": "jest"
+    "test": "jest",
+    "build": "cd android && ./gradlew clean && ./gradlew assembleRelease"
   },
   "dependencies": {
     "react": "19.1.0",
