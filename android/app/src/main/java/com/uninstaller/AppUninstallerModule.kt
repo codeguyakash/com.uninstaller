@@ -15,6 +15,13 @@ import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
 import android.content.Context
 
+
+
+import java.io.File
+import java.io.FileInputStream
+import java.io.FileOutputStream
+import java.nio.channels.FileChannel
+
 class AppUninstallerModule(private val reactContext: ReactApplicationContext) :
     ReactContextBaseJavaModule(reactContext) {
 
@@ -121,58 +128,50 @@ class AppUninstallerModule(private val reactContext: ReactApplicationContext) :
         try {
             val pm = reactContext.packageManager
             val appInfo = pm.getApplicationInfo(packageName, 0)
-            val srcApk = java.io.File(appInfo.sourceDir)
 
-            // Copy to app cache so it’s under a configured FileProvider root
-            val cacheDir = java.io.File(reactContext.cacheDir, "shared_apks")
-            if (!cacheDir.exists()) cacheDir.mkdirs()
-
-            val dstApk = java.io.File(cacheDir, "${appInfo.packageName}.apk")
-
-            // Efficient copy (API 26+). For older, use streams.
-            java.nio.file.Files.copy(
-                srcApk.toPath(),
-                dstApk.toPath(),
-                java.nio.file.StandardCopyOption.REPLACE_EXISTING
-            )
-
-            val apkUri = androidx.core.content.FileProvider.getUriForFile(
-                reactContext,
-                reactContext.packageName + ".provider",
-                dstApk
-            )
-
-            val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                type = "application/vnd.android.package-archive"
-                putExtra(Intent.EXTRA_STREAM, apkUri)
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                // Optional: help some receivers honor the grant correctly
-                clipData = android.content.ClipData.newRawUri("APK", apkUri)
+            // Sabhi APK paths le aao (split APKs bhi)
+            val apkFiles = mutableListOf<File>()
+            apkFiles.add(File(appInfo.sourceDir)) // base.apk
+            appInfo.splitSourceDirs?.forEach { path ->
+                apkFiles.add(File(path))
             }
 
-            // Grant read to all potential receivers in chooser (belt-and-suspenders)
-            val resInfoList = reactContext.packageManager.queryIntentActivities(shareIntent, 0)
-            for (resInfo in resInfoList) {
-                val packageNameGrant = resInfo.activityInfo.packageName
-                reactContext.grantUriPermission(
-                    packageNameGrant,
-                    apkUri,
-                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+            val uris = ArrayList<Uri>()
+            val cacheDir = File(reactContext.cacheDir, "shared_apks")
+            if (!cacheDir.exists()) cacheDir.mkdirs()
+
+            apkFiles.forEachIndexed { index, srcApk ->
+                val dstApk = File(cacheDir, "${appInfo.packageName}_$index.apk")
+                copyFile(srcApk, dstApk) // ✅ Custom copy
+                val apkUri = androidx.core.content.FileProvider.getUriForFile(
+                    reactContext,
+                    reactContext.packageName + ".provider",
+                    dstApk
                 )
+                uris.add(apkUri)
+            }
+
+            val shareIntent = Intent(Intent.ACTION_SEND_MULTIPLE).apply {
+                type = "application/vnd.android.package-archive"
+                putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
 
             val chooser = Intent.createChooser(shareIntent, "Share App")
-            val activity = currentActivity
-            if (activity != null) {
-                activity.startActivity(chooser)
-            } else {
-                chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                reactContext.startActivity(chooser)
-            }
+            chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            reactContext.startActivity(chooser)
 
             promise.resolve(true)
         } catch (e: Exception) {
             promise.reject("SHARE_ERROR", e)
+        }
+    }
+
+    fun copyFile(src: File, dst: File) {
+        FileInputStream(src).channel.use { inChannel ->
+            FileOutputStream(dst).channel.use { outChannel ->
+                inChannel.transferTo(0, inChannel.size(), outChannel)
+            }
         }
     }
 
