@@ -1,6 +1,5 @@
 package com.uninstaller
 
-import android.app.Activity
 import android.app.admin.DevicePolicyManager
 import android.content.ClipData
 import android.content.ComponentName
@@ -13,16 +12,10 @@ import android.net.Uri
 import android.util.Base64
 import com.facebook.react.bridge.*
 import java.io.ByteArrayOutputStream
-
-// File ops
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.nio.channels.FileChannel
-import java.util.zip.ZipEntry
-import java.util.zip.ZipOutputStream
-
-// AndroidX
 import androidx.core.content.FileProvider
 
 class AppUninstallerModule(private val reactContext: ReactApplicationContext) :
@@ -30,7 +23,7 @@ class AppUninstallerModule(private val reactContext: ReactApplicationContext) :
 
   override fun getName(): String = "AppUninstaller"
 
-  // ---------- List Apps (unchanged, just cleaned) ----------
+  // ---------- List Apps ----------
   @ReactMethod
   fun getInstalledApps(promise: Promise) {
     try {
@@ -93,55 +86,34 @@ class AppUninstallerModule(private val reactContext: ReactApplicationContext) :
     }
   }
 
-  // ---------- SHARE (single APK OR .apks bundle) ----------
+  // ---------- SHARE (always single .apk) ----------
   @ReactMethod
   fun shareApp(packageName: String, promise: Promise) {
     try {
       val pm = reactContext.packageManager
       val appInfo = pm.getApplicationInfo(packageName, 0)
 
-      // Collect all split parts
-      val parts = mutableListOf<File>()
-      val base = File(appInfo.sourceDir)
-      parts.add(base)
-      appInfo.splitSourceDirs?.forEach { parts.add(File(it)) }
-
-      val cacheDir = File(reactContext.cacheDir, "shared_apks")
+      val baseApk = File(appInfo.sourceDir) // sirf base APK
+      val cacheDir = File(reactContext.cacheDir, "shared_apk")
       if (!cacheDir.exists()) cacheDir.mkdirs()
 
-      val shareUri: Uri
-      val mimeType: String
-      val displayName: String
+      val out = File(cacheDir, "${appInfo.packageName}.apk")
+      copyFile(baseApk, out)
 
-      if (parts.size == 1) {
-        // ---- Single APK → share single .apk ----
-        val out = File(cacheDir, "${appInfo.packageName}.apk")
-        copyFile(base, out)
-        shareUri = FileProvider.getUriForFile(
-          reactContext, reactContext.packageName + ".provider", out
-        )
-        mimeType = "application/vnd.android.package-archive"
-        displayName = out.name
-      } else {
-        // ---- Split APKs → pack into one .apks ZIP ----
-        val bundle = File(cacheDir, "${appInfo.packageName}.apks")
-        zipFiles(parts, bundle)
-        shareUri = FileProvider.getUriForFile(
-          reactContext, reactContext.packageName + ".provider", bundle
-        )
-        // Use generic so chat apps won't try to preview; keeps it one file
-        mimeType = "application/octet-stream"
-        displayName = bundle.name
-      }
+      val shareUri = FileProvider.getUriForFile(
+        reactContext,
+        reactContext.packageName + ".provider",
+        out
+      )
 
       val shareIntent = Intent(Intent.ACTION_SEND).apply {
-        type = mimeType
+        type = "application/vnd.android.package-archive"
         putExtra(Intent.EXTRA_STREAM, shareUri)
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        clipData = ClipData.newRawUri(displayName, shareUri)
+        clipData = ClipData.newRawUri(out.name, shareUri)
       }
 
-      // Grant to all potential receivers (belt & suspenders)
+      // Grant URI permission to all receivers
       val resInfos = reactContext.packageManager.queryIntentActivities(shareIntent, 0)
       for (ri in resInfos) {
         reactContext.grantUriPermission(
@@ -168,20 +140,7 @@ class AppUninstallerModule(private val reactContext: ReactApplicationContext) :
     }
   }
 
-  private fun zipFiles(files: List<File>, outZip: File) {
-    ZipOutputStream(FileOutputStream(outZip)).use { zos ->
-      files.forEachIndexed { idx, f ->
-        FileInputStream(f).use { fis ->
-          val entry = ZipEntry("split_$idx.apk")
-          zos.putNextEntry(entry)
-          fis.copyTo(zos)
-          zos.closeEntry()
-        }
-      }
-    }
-  }
-
-  // ---------- Device Admin (unchanged) ----------
+  // ---------- Device Admin ----------
   @ReactMethod
   fun deactivateDeviceAdmin(promise: Promise) {
     try {
